@@ -1,5 +1,7 @@
 # Directory
 
+https://kimbatt.github.io/stuff/bitcoin-directory/
+
 On this page, you can view all possible bitcoin addresses.  
 
 Page layout:
