@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>shamir</title>
+    
+    <style>
+    body
+    {
+        background: #323639;
+        color: white;
+        font-family: sans-serif;
+    }
+
+    button
+    {
+        background-color: #146dff;
+        border: none;
+        border-radius: 5px;
+        color: #ffffff;
+        padding: 10px 15px 10px 15px;
+        font-family: "Verdana";
+        font-size: 24px;
+        cursor: pointer;
+        transition: 0.15s;
+        outline: none;
+    }
+
+    button:hover
+    {
+        background-color: #54adff;
+        cursor: pointer;
+    }
+
+    button:disabled
+    {
+        background-color: #77abff;
+        cursor: not-allowed;
+    }
+    
+    #generate_result
+    {
+        display: table;
+    }
+    
+    #generate_result :nth-child(1n)
+    {
+        border: 1px solid #a0a0a0;
+        padding: 2px;
+        background: black;
+        word-break: break-all;
+    }
+    
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button
+    {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    </style>
+</head>
+
+<body>
+    <div style="margin-bottom: 10px;">
+        <button id="button_generate" onclick="LayoutGenerate()" style="width: 300px;" disabled>Split up secret</button>
+        <button id="button_reconstruct" onclick="LayoutReconstruct()" style="width: 300px; margin-left: 10px;">Reconstruct secret</button>
+    </div>
+    <div id="layout_generate">
+        <div>
+            <div style="padding-right: 10px; margin-bottom: 10px; font-size: 20px;">Enter your secret:</div>
+            <textarea id="input_secret" style="width: calc(100% - 5px); height: 200px; resize: none; font-size: 20px;"></textarea>
+        </div>
+        <br>
+        <div>
+            <div style="display: inline-block; padding-right: 10px; margin-bottom: 10px; font-size: 20px; width: 550px;">Generate this many shares (maximum 255):</div>
+            <input id="input_total" type="number" style="display: inline-block; width: 50px; font-size: 20px;" value="5"></input>
+        </div>
+        <br>
+        <div>
+            <div style="display: inline-block; padding-right: 10px; margin-bottom: 10px; font-size: 20px; width: 550px;">Require this many shares to reconstruct the secret:</div>
+            <input id="input_required" type="number" style="display: inline-block; width: 50px; font-size: 20px;" value="3"></input>
+        </div>
+        <br>
+        <div style="display: table-row">
+            <button style="display: inline-block" onclick="generate()">Generate</button>
+            <!--
+            <div style="display: inline-block; margin-left: 40px; font-size: 20px;">Output type: <select id="output_type" style="font-size: 20px;">
+                    <option value="hex">Hex</option>
+                    <option value="base64">Base64</option>
+                    <option value="words">Words</option>
+                </select>
+            </div>
+            -->
+        </div>
+        <br>
+        <div id="error_text" style="font-weight: bold; color: red; font-size: 20px; margin-bottom: 10px;"></div>
+        <div id="result">
+            <div id="result_text" style="margin-bottom: 10px; font-size: 20px;"></div>
+            <div id="generate_result"></div>
+        </div>
+    </div>
+    <div id="layout_reconstruct" style="display: none;">
+        <div style="padding-right: 10px; margin-bottom: 10px; font-size: 20px;">Enter your shares (one per line):</div>
+        <textarea id="decode_textarea" style="font-family: Consolas; width: calc(100% - 5px); height: 200px; resize: none; font-size: 20px; white-space: nowrap;" oninput="decode()" onfocus="textareaFocus(event.target)"></textarea>
+        <br>
+        <div style="font-size: 20px; margin-top: 40px; margin-bottom: 10px;">The result will appear here:</div>
+        <textarea readonly placeholder="Cannot reconstruct anything from the shares you provided " id="decode_result" style="width: calc(100% - 5px); height: 200px; resize: none; font-size: 20px;"></textarea>
+    </div>
+    
+    
+    <script>
+        
+        function LayoutGenerate()
+        {
+            document.getElementById("layout_reconstruct").style.display = "none";
+            document.getElementById("layout_generate").style.display = "";
+            
+            document.getElementById("button_reconstruct").disabled = false;
+            document.getElementById("button_generate").disabled = true;
+        }
+        
+        function LayoutReconstruct()
+        {
+            document.getElementById("layout_reconstruct").style.display = "";
+            document.getElementById("layout_generate").style.display = "none";
+            
+            document.getElementById("button_reconstruct").disabled = true;
+            document.getElementById("button_generate").disabled = false;
+        }
+        
+        var generateResultCSSObject;
+        var cssRules = document.querySelectorAll("style")[0].sheet.cssRules;
+        for (var i = 0; i < cssRules.length; ++i)
+        {
+            if (cssRules.item(i).selectorText == "#generate_result :nth-child(n)")
+            {
+                generateResultCSSObject = cssRules.item(i).style;
+                break;
+            }
+        }
+        
+        //var wordList = ["abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire", "across", "act", "action", "actor", "actress", "actual", "adapt", "add", "addict", "address", "adjust", "admit", "adult", "advance", "advice", "aerobic", "affair", "afford", "afraid", "again", "age", "agent", "agree", "ahead", "aim", "air", "airport", "aisle", "alarm", "album", "alcohol", "alert", "alien", "all", "alley", "allow", "almost", "alone", "alpha", "already", "also", "alter", "always", "amateur", "amazing", "among", "amount", "amused", "analyst", "anchor", "ancient", "anger", "angle", "angry", "animal", "ankle", "announce", "annual", "another", "answer", "antenna", "antique", "anxiety", "any", "apart", "apology", "appear", "apple", "approve", "april", "arch", "arctic", "area", "arena", "argue", "arm", "armed", "armor", "army", "around", "arrange", "arrest", "arrive", "arrow", "art", "artefact", "artist", "artwork", "ask", "aspect", "assault", "asset", "assist", "assume", "asthma", "athlete", "atom", "attack", "attend", "attitude", "attract", "auction", "audit", "august", "aunt", "author", "auto", "autumn", "average", "avocado", "avoid", "awake", "aware", "away", "awesome", "awful", "awkward", "axis", "baby", "bachelor", "bacon", "badge", "bag", "balance", "balcony", "ball", "bamboo", "banana", "banner", "bar", "barely", "bargain", "barrel", "base", "basic", "basket", "battle", "beach", "bean", "beauty", "because", "become", "beef", "before", "begin", "behave", "behind", "believe", "below", "belt", "bench", "benefit", "best", "betray", "better", "between", "beyond", "bicycle", "bid", "bike", "bind", "biology", "bird", "birth", "bitter", "black", "blade", "blame", "blanket", "blast", "bleak", "bless", "blind", "blood", "blossom", "blouse", "blue", "blur", "blush", "board", "boat", "body", "boil", "bomb", "bone", "bonus", "book", "boost", "border", "boring", "borrow", "boss", "bottom", "bounce", "box", "boy", "bracket", "brain", "brand", "brass", "brave", "bread", "breeze", "brick", "bridge", "brief", "bright", "bring", "brisk", "broccoli", "broken", "bronze", "broom", "brother", "brown", "brush", "bubble", "buddy", "budget", "buffalo", "build", "bulb", "bulk", "bullet", "bundle", "bunker", "burden", "burger", "burst", "bus", "business", "busy", "butter", "buyer", "buzz", "cabbage", "cabin", "cable", "cactus", "cage", "cake", "call", "calm", "camera", "camp", "can", "canal", "cancel", "candy", "cannon", "canoe", "canvas", "canyon", "capable", "capital", "captain", "car", "carbon", "card", "cargo", "carpet", "carry", "cart", "case", "cash", "casino", "castle", "casual", "cat", "catalog", "catch", "category", "cattle", "caught", "cause", "caution", "cave", "ceiling", "celery", "cement", "census", "century", "cereal", "certain", "chair", "chalk", "champion", "change", "chaos", "chapter", "charge", "chase", "chat", "cheap", "check", "cheese", "chef", "cherry", "chest", "chicken", "chief", "child", "chimney", "choice", "choose", "chronic", "chuckle", "chunk", "churn", "cigar", "cinnamon", "circle", "citizen", "city", "civil", "claim", "clap", "clarify", "claw", "clay", "clean", "clerk", "clever", "click", "client", "cliff", "climb", "clinic", "clip", "clock", "clog", "close", "cloth", "cloud", "clown", "club", "clump", "cluster", "clutch", "coach", "coast", "coconut", "code", "coffee", "coil", "coin", "collect", "color", "column", "combine", "come", "comfort", "comic", "common", "company", "concert", "conduct", "confirm", "congress", "connect", "consider", "control", "convince", "cook", "cool", "copper", "copy", "coral", "core", "corn", "correct", "cost", "cotton", "couch", "country", "couple", "course", "cousin", "cover", "coyote", "crack", "cradle", "craft", "cram", "crane", "crash", "crater", "crawl", "crazy", "cream", "credit", "creek", "crew", "cricket", "crime", "crisp", "critic", "crop", "cross", "crouch", "crowd", "crucial", "cruel", "cruise", "crumble", "crunch", "crush", "cry", "crystal", "cube", "culture", "cup", "cupboard", "curious", "current", "curtain", "curve", "cushion", "custom", "cute", "cycle", "dad", "damage", "damp", "dance", "danger", "daring", "dash", "daughter", "dawn", "day", "deal", "debate", "debris", "decade", "december", "decide", "decline", "decorate", "decrease", "deer", "defense", "define", "defy", "degree", "delay", "deliver", "demand", "demise", "denial", "dentist", "deny", "depart", "depend", "deposit", "depth", "deputy", "derive", "describe", "desert", "design", "desk", "despair", "destroy", "detail", "detect", "develop", "device", "devote", "diagram", "dial", "diamond", "diary", "dice", "diesel", "diet", "differ", "digital", "dignity", "dilemma", "dinner", "dinosaur", "direct", "dirt", "disagree", "discover", "disease", "dish", "dismiss", "disorder", "display", "distance", "divert", "divide", "divorce", "dizzy", "doctor", "document", "dog", "doll", "dolphin", "domain", "donate", "donkey", "donor", "door", "dose", "double", "dove", "draft", "dragon", "drama", "drastic", "draw", "dream", "dress", "drift", "drill", "drink", "drip", "drive", "drop", "drum", "dry", "duck", "dumb", "dune", "during", "dust", "dutch", "duty", "dwarf", "dynamic", "eager", "eagle", "early", "earn", "earth", "easily", "east", "easy", "echo", "ecology", "economy", "edge", "edit", "educate", "effort", "egg", "eight", "either", "elbow", "elder", "electric", "elegant", "element", "elephant", "elevator", "elite", "else", "embark", "embody", "embrace", "emerge", "emotion", "employ", "empower", "empty", "enable", "enact", "end", "endless", "endorse", "enemy", "energy", "enforce", "engage", "engine", "enhance", "enjoy", "enlist", "enough", "enrich", "enroll", "ensure", "enter", "entire", "entry", "envelope", "episode", "equal", "equip", "era", "erase", "erode", "erosion", "error", "erupt", "escape", "essay", "essence", "estate", "eternal", "ethics", "evidence", "evil", "evoke", "evolve", "exact", "example", "excess", "exchange", "excite", "exclude", "excuse", "execute", "exercise", "exhaust", "exhibit", "exile", "exist", "exit", "exotic", "expand", "expect", "expire", "explain", "expose", "express", "extend", "extra", "eye", "eyebrow", "fabric", "face", "faculty", "fade", "faint", "faith", "fall", "false", "fame", "family", "famous", "fan", "fancy", "fantasy", "farm", "fashion", "fat", "fatal", "father", "fatigue", "fault", "favorite", "feature", "february", "federal", "fee", "feed", "feel", "female", "fence", "festival", "fetch", "fever", "few", "fiber", "fiction", "field", "figure", "file", "film", "filter", "final", "find", "fine", "finger", "finish", "fire", "firm", "first", "fiscal", "fish", "fit", "fitness", "fix", "flag", "flame", "flash", "flat", "flavor", "flee", "flight", "flip", "float", "flock", "floor", "flower", "fluid", "flush", "fly", "foam", "focus", "fog", "foil", "fold", "follow", "food", "foot", "force", "forest", "forget", "fork", "fortune", "forum", "forward", "fossil", "foster", "found", "fox", "fragile", "frame", "frequent", "fresh", "friend", "fringe", "frog", "front", "frost", "frown", "frozen", "fruit", "fuel", "fun", "funny", "furnace", "fury", "future", "gadget", "gain", "galaxy", "gallery", "game", "gap", "garage", "garbage", "garden", "garlic", "garment", "gas", "gasp", "gate", "gather", "gauge", "gaze", "general", "genius", "genre", "gentle", "genuine", "gesture", "ghost", "giant", "gift", "giggle", "ginger", "giraffe", "girl", "give", "glad", "glance", "glare", "glass", "glide", "glimpse", "globe", "gloom", "glory", "glove", "glow", "glue", "goat", "goddess", "gold", "good", "goose", "gorilla", "gospel", "gossip", "govern", "gown", "grab", "grace", "grain", "grant", "grape", "grass", "gravity", "great", "green", "grid", "grief", "grit", "grocery", "group", "grow", "grunt", "guard", "guess", "guide", "guilt", "guitar", "gun", "gym", "habit", "hair", "half", "hammer", "hamster", "hand", "happy", "harbor", "hard", "harsh", "harvest", "hat", "have", "hawk", "hazard", "head", "health", "heart", "heavy", "hedgehog", "height", "hello", "helmet", "help", "hen", "hero", "hidden", "high", "hill", "hint", "hip", "hire", "history", "hobby", "hockey", "hold", "hole", "holiday", "hollow", "home", "honey", "hood", "hope", "horn", "horror", "horse", "hospital", "host", "hotel", "hour", "hover", "hub", "huge", "human", "humble", "humor", "hundred", "hungry", "hunt", "hurdle", "hurry", "hurt", "husband", "hybrid", "ice", "icon", "idea", "identify", "idle", "ignore", "ill", "illegal", "illness", "image", "imitate", "immense", "immune", "impact", "impose", "improve", "impulse", "inch", "include", "income", "increase", "index", "indicate", "indoor", "industry", "infant", "inflict", "inform", "inhale", "inherit", "initial", "inject", "injury", "inmate", "inner", "innocent", "input", "inquiry", "insane", "insect", "inside", "inspire", "install", "intact", "interest", "into", "invest", "invite", "involve", "iron", "island", "isolate", "issue", "item", "ivory", "jacket", "jaguar", "jar", "jazz", "jealous", "jeans", "jelly", "jewel", "job", "join", "joke", "journey", "joy", "judge", "juice", "jump", "jungle", "junior", "junk", "just", "kangaroo", "keen", "keep", "ketchup", "key", "kick", "kid", "kidney", "kind", "kingdom", "kiss", "kit", "kitchen", "kite", "kitten", "kiwi", "knee", "knife", "knock", "know", "lab", "label", "labor", "ladder", "lady", "lake", "lamp", "language", "laptop", "large", "later", "latin", "laugh", "laundry", "lava", "law", "lawn", "lawsuit", "layer", "lazy", "leader", "leaf", "learn", "leave", "lecture", "left", "leg", "legal", "legend", "leisure", "lemon", "lend", "length", "lens", "leopard", "lesson", "letter", "level", "liar", "liberty", "library", "license", "life", "lift", "light", "like", "limb", "limit", "link", "lion", "liquid", "list", "little", "live", "lizard", "load", "loan", "lobster", "local", "lock", "logic", "lonely", "long", "loop", "lottery", "loud", "lounge", "love", "loyal", "lucky", "luggage", "lumber", "lunar", "lunch", "luxury", "lyrics", "machine", "mad", "magic", "magnet", "maid", "mail", "main", "major", "make", "mammal", "man", "manage", "mandate", "mango", "mansion", "manual", "maple", "marble", "march", "margin", "marine", "market", "marriage", "mask", "mass", "master", "match", "material", "math", "matrix", "matter", "maximum", "maze", "meadow", "mean", "measure", "meat", "mechanic", "medal", "media", "melody", "melt", "member", "memory", "mention", "menu", "mercy", "merge", "merit", "merry", "mesh", "message", "metal", "method", "middle", "midnight", "milk", "million", "mimic", "mind", "minimum", "minor", "minute", "miracle", "mirror", "misery", "miss", "mistake", "mix", "mixed", "mixture", "mobile", "model", "modify", "mom", "moment", "monitor", "monkey", "monster", "month", "moon", "moral", "more", "morning", "mosquito", "mother", "motion", "motor", "mountain", "mouse", "move", "movie", "much", "muffin", "mule", "multiply", "muscle", "museum", "mushroom", "music", "must", "mutual", "myself", "mystery", "myth", "naive", "name", "napkin", "narrow", "nasty", "nation", "nature", "near", "neck", "need", "negative", "neglect", "neither", "nephew", "nerve", "nest", "net", "network", "neutral", "never", "news", "next", "nice", "night", "noble", "noise", "nominee", "noodle", "normal", "north", "nose", "notable", "note", "nothing", "notice", "novel", "now", "nuclear", "number", "nurse", "nut", "oak", "obey", "object", "oblige", "obscure", "observe", "obtain", "obvious", "occur", "ocean", "october", "odor", "off", "offer", "office", "often", "oil", "okay", "old", "olive", "olympic", "omit", "once", "one", "onion", "online", "only", "open", "opera", "opinion", "oppose", "option", "orange", "orbit", "orchard", "order", "ordinary", "organ", "orient", "original", "orphan", "ostrich", "other", "outdoor", "outer", "output", "outside", "oval", "oven", "over", "own", "owner", "oxygen", "oyster", "ozone", "pact", "paddle", "page", "pair", "palace", "palm", "panda", "panel", "panic", "panther", "paper", "parade", "parent", "park", "parrot", "party", "pass", "patch", "path", "patient", "patrol", "pattern", "pause", "pave", "payment", "peace", "peanut", "pear", "peasant", "pelican", "pen", "penalty", "pencil", "people", "pepper", "perfect", "permit", "person", "pet", "phone", "photo", "phrase", "physical", "piano", "picnic", "picture", "piece", "pig", "pigeon", "pill", "pilot", "pink", "pioneer", "pipe", "pistol", "pitch", "pizza", "place", "planet", "plastic", "plate", "play", "please", "pledge", "pluck", "plug", "plunge", "poem", "poet", "point", "polar", "pole", "police", "pond", "pony", "pool", "popular", "portion", "position", "possible", "post", "potato", "pottery", "poverty", "powder", "power", "practice", "praise", "predict", "prefer", "prepare", "present", "pretty", "prevent", "price", "pride", "primary", "print", "priority", "prison", "private", "prize", "problem", "process", "produce", "profit", "program", "project", "promote", "proof", "property", "prosper", "protect", "proud", "provide", "public", "pudding", "pull", "pulp", "pulse", "pumpkin", "punch", "pupil", "puppy", "purchase", "purity", "purpose", "purse", "push", "put", "puzzle", "pyramid", "quality", "quantum", "quarter", "question", "quick", "quit", "quiz", "quote", "rabbit", "raccoon", "race", "rack", "radar", "radio", "rail", "rain", "raise", "rally", "ramp", "ranch", "random", "range", "rapid", "rare", "rate", "rather", "raven", "raw", "razor", "ready", "real", "reason", "rebel", "rebuild", "recall", "receive", "recipe", "record", "recycle", "reduce", "reflect", "reform", "refuse", "region", "regret", "regular", "reject", "relax", "release", "relief", "rely", "remain", "remember", "remind", "remove", "render", "renew", "rent", "reopen", "repair", "repeat", "replace", "report", "require", "rescue", "resemble", "resist", "resource", "response", "result", "retire", "retreat", "return", "reunion", "reveal", "review", "reward", "rhythm", "rib", "ribbon", "rice", "rich", "ride", "ridge", "rifle", "right", "rigid", "ring", "riot", "ripple", "risk", "ritual", "rival", "river", "road", "roast", "robot", "robust", "rocket", "romance", "roof", "rookie", "room", "rose", "rotate", "rough", "round", "route", "royal", "rubber", "rude", "rug", "rule", "run", "runway", "rural", "sad", "saddle", "sadness", "safe", "sail", "salad", "salmon", "salon", "salt", "salute", "same", "sample", "sand", "satisfy", "satoshi", "sauce", "sausage", "save", "say", "scale", "scan", "scare", "scatter", "scene", "scheme", "school", "science", "scissors", "scorpion", "scout", "scrap", "screen", "script", "scrub", "sea", "search", "season", "seat", "second", "secret", "section", "security", "seed", "seek", "segment", "select", "sell", "seminar", "senior", "sense", "sentence", "series", "service", "session", "settle", "setup", "seven", "shadow", "shaft", "shallow", "share", "shed", "shell", "sheriff", "shield", "shift", "shine", "ship", "shiver", "shock", "shoe", "shoot", "shop", "short", "shoulder", "shove", "shrimp", "shrug", "shuffle", "shy", "sibling", "sick", "side", "siege", "sight", "sign", "silent", "silk", "silly", "silver", "similar", "simple", "since", "sing", "siren", "sister", "situate", "six", "size", "skate", "sketch", "ski", "skill", "skin", "skirt", "skull", "slab", "slam", "sleep", "slender", "slice", "slide", "slight", "slim", "slogan", "slot", "slow", "slush", "small", "smart", "smile", "smoke", "smooth", "snack", "snake", "snap", "sniff", "snow", "soap", "soccer", "social", "sock", "soda", "soft", "solar", "soldier", "solid", "solution", "solve", "someone", "song", "soon", "sorry", "sort", "soul", "sound", "soup", "source", "south", "space", "spare", "spatial", "spawn", "speak", "special", "speed", "spell", "spend", "sphere", "spice", "spider", "spike", "spin", "spirit", "split", "spoil", "sponsor", "spoon", "sport", "spot", "spray", "spread", "spring", "spy", "square", "squeeze", "squirrel", "stable", "stadium", "staff", "stage", "stairs", "stamp", "stand", "start", "state", "stay", "steak", "steel", "stem", "step", "stereo", "stick", "still", "sting", "stock", "stomach", "stone", "stool", "story", "stove", "strategy", "street", "strike", "strong", "struggle", "student", "stuff", "stumble", "style", "subject", "submit", "subway", "success", "such", "sudden", "suffer", "sugar", "suggest", "suit", "summer", "sun", "sunny", "sunset", "super", "supply", "supreme", "sure", "surface", "surge", "surprise", "surround", "survey", "suspect", "sustain", "swallow", "swamp", "swap", "swarm", "swear", "sweet", "swift", "swim", "swing", "switch", "sword", "symbol", "symptom", "syrup", "system", "table", "tackle", "tag", "tail", "talent", "talk", "tank", "tape", "target", "task", "taste", "tattoo", "taxi", "teach", "team", "tell", "ten", "tenant", "tennis", "tent", "term", "test", "text", "thank", "that", "theme", "then", "theory", "there", "they", "thing", "this", "thought", "three", "thrive", "throw", "thumb", "thunder", "ticket", "tide", "tiger", "tilt", "timber", "time", "tiny", "tip", "tired", "tissue", "title", "toast", "tobacco", "today", "toddler", "toe", "together", "toilet", "token", "tomato", "tomorrow", "tone", "tongue", "tonight", "tool", "tooth", "top", "topic", "topple", "torch", "tornado", "tortoise", "toss", "total", "tourist", "toward", "tower", "town", "toy", "track", "trade", "traffic", "tragic", "train", "transfer", "trap", "trash", "travel", "tray", "treat", "tree", "trend", "trial", "tribe", "trick", "trigger", "trim", "trip", "trophy", "trouble", "truck", "true", "truly", "trumpet", "trust", "truth", "try", "tube", "tuition", "tumble", "tuna", "tunnel", "turkey", "turn", "turtle", "twelve", "twenty", "twice", "twin", "twist", "two", "type", "typical", "ugly", "umbrella", "unable", "unaware", "uncle", "uncover", "under", "undo", "unfair", "unfold", "unhappy", "uniform", "unique", "unit", "universe", "unknown", "unlock", "until", "unusual", "unveil", "update", "upgrade", "uphold", "upon", "upper", "upset", "urban", "urge", "usage", "use", "used", "useful", "useless", "usual", "utility", "vacant", "vacuum", "vague", "valid", "valley", "valve", "van", "vanish", "vapor", "various", "vast", "vault", "vehicle", "velvet", "vendor", "venture", "venue", "verb", "verify", "version", "very", "vessel", "veteran", "viable", "vibrant", "vicious", "victory", "video", "view", "village", "vintage", "violin", "virtual", "virus", "visa", "visit", "visual", "vital", "vivid", "vocal", "voice", "void", "volcano", "volume", "vote", "voyage", "wage", "wagon", "wait", "walk", "wall", "walnut", "want", "warfare", "warm", "warrior", "wash", "wasp", "waste", "water", "wave", "way", "wealth", "weapon", "wear", "weasel", "weather", "web", "wedding", "weekend", "weird", "welcome", "west", "wet", "whale", "what", "wheat", "wheel", "when", "where", "whip", "whisper", "wide", "width", "wife", "wild", "will", "win", "window", "wine", "wing", "wink", "winner", "winter", "wire", "wisdom", "wise", "wish", "witness", "wolf", "woman", "wonder", "wood", "wool", "word", "work", "world", "worry", "worth", "wrap", "wreck", "wrestle", "wrist", "write", "wrong", "yard", "year", "yellow", "you", "young", "youth", "zebra", "zero", "zone", "zoo"];
+        
+        /*
+        function calculateRandomizedIndicesInverse()
+        {
+            var ret = {};
+            for (var i = 0; i < 256; ++i)
+            {
+                var c = randomizedIndices[i];
+                ret[c] = i;
+            }
+            
+            randomizedIndicesInverse = [];
+            for (var i = 0; i < 256; ++i)
+            {
+                randomizedIndicesInverse.push("0x" + ret[i].toString(16).padStart(2, "0"));
+            }
+            
+            console.log(randomizedIndicesInverse.join(", "));
+        }
+        */
+    
+        // randomize the indices, so the starting 2 letters of the shares will not be 01, 02, etc., it will be a random one
+        // so an attacker would have a harder time finding out how many shares were made
+        var randomizedIndices = [
+            0x24, 0xb3, 0x7d, 0x81, 0xc6, 0x41, 0xdc, 0x6e, 0x57, 0x2a, 0xc3, 0x7e, 0x47, 0x5e, 0x95, 0x69,
+            0x01, 0xc2, 0x52, 0x0c, 0xe0, 0x61, 0xb4, 0x59, 0x79, 0x11, 0xfd, 0xaa, 0x9f, 0x92, 0x2f, 0x78,
+            0x86, 0xbb, 0xc9, 0x00, 0xe3, 0xfb, 0xce, 0x83, 0x36, 0xb1, 0x1f, 0x1c, 0xa6, 0x4e, 0x4f, 0xd8,
+            0x3f, 0x53, 0x60, 0xa0, 0x7b, 0x48, 0x27, 0xae, 0xda, 0xdb, 0x1e, 0xcb, 0xb0, 0xe5, 0xc5, 0x89,
+            0x37, 0x6c, 0x5d, 0xa9, 0x20, 0x8a, 0xdf, 0x91, 0x28, 0xa3, 0xc1, 0x84, 0xbe, 0x51, 0xfc, 0x96,
+            0x4c, 0x85, 0xd3, 0xc7, 0xad, 0xbf, 0x2b, 0x77, 0x17, 0xb5, 0xac, 0x04, 0xe8, 0x70, 0xd0, 0xcc,
+            0xde, 0x55, 0xf7, 0xf1, 0xee, 0x05, 0x13, 0x5b, 0x6d, 0x43, 0x12, 0x33, 0xf2, 0xa1, 0x90, 0x23,
+            0x2d, 0x87, 0x0a, 0xcd, 0xc4, 0x16, 0xca, 0xd7, 0x18, 0x06, 0x15, 0x44, 0x5f, 0xea, 0x4d, 0xa4,
+            0xb7, 0xef, 0x6b, 0xba, 0x38, 0x46, 0x10, 0xa7, 0x8b, 0x3b, 0x25, 0x66, 0x22, 0xf8, 0xf3, 0x0b,
+            0xe9, 0x3a, 0x7f, 0x1d, 0x58, 0x98, 0x50, 0xdd, 0xb6, 0x1a, 0x7a, 0x64, 0x3d, 0x03, 0x42, 0x62,
+            0xff, 0x02, 0x3c, 0x5a, 0x6a, 0xe4, 0x07, 0x26, 0xf9, 0x45, 0x9c, 0xaf, 0x76, 0xd2, 0x8e, 0xbd,
+            0xa2, 0x39, 0xcf, 0x0e, 0xa5, 0x9d, 0xd9, 0x8f, 0x4a, 0xfa, 0xe7, 0x34, 0x31, 0x21, 0xf0, 0x32,
+            0x4b, 0x73, 0x9b, 0x19, 0xd5, 0x0f, 0xed, 0x56, 0xc0, 0xd4, 0x35, 0x09, 0x7c, 0x8d, 0x97, 0x72,
+            0x65, 0x94, 0xf6, 0x3e, 0x6f, 0xd1, 0xc8, 0xe6, 0xd6, 0xb8, 0x75, 0xa8, 0x74, 0x2c, 0x49, 0x1b,
+            0x5c, 0xb2, 0x54, 0xf4, 0x82, 0xfe, 0xe2, 0xe1, 0x0d, 0x14, 0xb9, 0x9e, 0x29, 0x2e, 0x99, 0x67,
+            0x30, 0xec, 0xf5, 0xbc, 0x40, 0x71, 0x8c, 0x93, 0x88, 0x68, 0xeb, 0x80, 0x63, 0x9a, 0x08, 0xab];
+        
+        var randomizedIndicesInverse = [
+            0x23, 0x10, 0xa1, 0x9d, 0x5b, 0x65, 0x79, 0xa6, 0xfe, 0xcb, 0x72, 0x8f, 0x13, 0xe8, 0xb3, 0xc5,
+            0x86, 0x19, 0x6a, 0x66, 0xe9, 0x7a, 0x75, 0x58, 0x78, 0xc3, 0x99, 0xdf, 0x2b, 0x93, 0x3a, 0x2a,
+            0x44, 0xbd, 0x8c, 0x6f, 0x00, 0x8a, 0xa7, 0x36, 0x48, 0xec, 0x09, 0x56, 0xdd, 0x70, 0xed, 0x1e,
+            0xf0, 0xbc, 0xbf, 0x6b, 0xbb, 0xca, 0x28, 0x40, 0x84, 0xb1, 0x91, 0x89, 0xa2, 0x9c, 0xd3, 0x30,
+            0xf4, 0x05, 0x9e, 0x69, 0x7b, 0xa9, 0x85, 0x0c, 0x35, 0xde, 0xb8, 0xc0, 0x50, 0x7e, 0x2d, 0x2e,
+            0x96, 0x4d, 0x12, 0x31, 0xe2, 0x61, 0xc7, 0x08, 0x94, 0x17, 0xa3, 0x67, 0xe0, 0x42, 0x0d, 0x7c,
+            0x32, 0x15, 0x9f, 0xfc, 0x9b, 0xd0, 0x8b, 0xef, 0xf9, 0x0f, 0xa4, 0x82, 0x41, 0x68, 0x07, 0xd4,
+            0x5d, 0xf5, 0xcf, 0xc1, 0xdc, 0xda, 0xac, 0x57, 0x1f, 0x18, 0x9a, 0x34, 0xcc, 0x02, 0x0b, 0x92,
+            0xfb, 0x03, 0xe4, 0x27, 0x4b, 0x51, 0x20, 0x71, 0xf8, 0x3f, 0x45, 0x88, 0xf6, 0xcd, 0xae, 0xb7,
+            0x6e, 0x47, 0x1d, 0xf7, 0xd1, 0x0e, 0x4f, 0xce, 0x95, 0xee, 0xfd, 0xc2, 0xaa, 0xb5, 0xeb, 0x1c,
+            0x33, 0x6d, 0xb0, 0x49, 0x7f, 0xb4, 0x2c, 0x87, 0xdb, 0x43, 0x1b, 0xff, 0x5a, 0x54, 0x37, 0xab,
+            0x3c, 0x29, 0xe1, 0x01, 0x16, 0x59, 0x98, 0x80, 0xd9, 0xea, 0x83, 0x21, 0xf3, 0xaf, 0x4c, 0x55,
+            0xc8, 0x4a, 0x11, 0x0a, 0x74, 0x3e, 0x04, 0x53, 0xd6, 0x22, 0x76, 0x3b, 0x5f, 0x73, 0x26, 0xb2,
+            0x5e, 0xd5, 0xad, 0x52, 0xc9, 0xc4, 0xd8, 0x77, 0x2f, 0xb6, 0x38, 0x39, 0x06, 0x97, 0x60, 0x46,
+            0x14, 0xe7, 0xe6, 0x24, 0xa5, 0x3d, 0xd7, 0xba, 0x5c, 0x90, 0x7d, 0xfa, 0xf1, 0xc6, 0x64, 0x81,
+            0xbe, 0x63, 0x6c, 0x8e, 0xe3, 0xf2, 0xd2, 0x62, 0x8d, 0xa8, 0xb9, 0x25, 0x4e, 0x1a, 0xe5, 0xa0];
+        
+        // exponents of mersenne primes
+        // a prime p is a mersenne prime, if 2^p - 1 is prime
+        // so 2^521 - 1 is a prime, 2^1279 -1 is a prime, etc...
+        var primeExponents = [521n, 1279n, 2203n, 4423n, 9689n, 19937n, 44479n, 86243n, 132049n, 216091n];
+        
+        // evaluate a polynomial by the given coeffs at x modulo prime
+        function evalAt(x, coeffs, prime)
+        {
+            var result = 0n;
+            for (var i = coeffs.length - 1; i >= 0; --i)
+            {
+                result *= x;
+                result += coeffs[i];
+                result %= prime;
+            }
+            
+            return result;
+        }
+        
+        // calculates a modular multiplicative inverse of two numbers, so that a*x is congruent to 1 mod n (we are calculating x here)
+        // a and n must be relative primes (we use this function that n is always a prime, so this is not a problem)
+        function modinv(a, n)
+        {
+            var lm = 1n;
+            var hm = 0n;
+            var low = a % n;
+            var high = n;
+            var ratio;
+            var nm;
+            var nnew;
+
+            while (low < 0n)
+                low += n;
+
+            while (low > 1n)
+            {
+                ratio = high / low;
+                nm = hm - lm * ratio;
+                nnew = high - low * ratio;
+                hm = lm;
+                high = low;
+                lm = nm;
+                low = nnew;
+            }
+            
+            return lm % n;
+        }
+        
+        // reconstruct from the shares
+        function reconstruct(shares, prime)
+        {
+            var count = shares.length;
+            var secretX = 0n;
+            var result = 0n;
+            for (var i = 0; i < count; ++i)
+            {
+                var current = shares[i];
+                var numerator = 1n;
+                var denominator = 1n;
+                
+                for (var j = 0; j < count; ++j)
+                {
+                    if (i == j)
+                        continue;
+                    
+                    numerator *= secretX - shares[j][0];
+                    denominator *= current[0] - shares[j][0];
+                }
+                
+                numerator *= current[1];
+                
+                var finalValue = (numerator * modinv(denominator, prime)) % prime;
+                while (finalValue < 0n)
+                    finalValue += prime;
+                
+                result += finalValue;
+            }
+            
+            return result % prime;
+        }
+        
+        // check if an input is a valid number
+        function validateNumber(name, id)
+        {
+            var text = document.getElementById(id).value;
+            if (text == "")
+                return name + " is not a number";
+                
+            var num = Number(text);
+            if (isNaN(num))
+                return name + " is not a number";
+            
+            if (num < 0n)
+                return name + " must not be negative";
+            
+            return num;
+        }
+        
+        // convert a string to bytes using utf-8 encoding
+        function stringToBytes(text)
+        {
+            var ret = [];
+            for (var i = 0; i < text.length; ++i)
+            {
+                var charcode = text.charCodeAt(i);
+                if (charcode < 0x80)
+                    ret.push(charcode);
+                else if (charcode < 0x800)
+                {
+                    ret.push(0xc0 | (charcode >> 6));
+                    ret.push(0x80 | (charcode & 0x3f));
+                }
+                else if (charcode < 0xd800 || charcode >= 0xe000)
+                {
+                    ret.push(0xe0 | (charcode >> 12));
+                    ret.push(0x80 | ((charcode >> 6) & 0x3f));
+                    ret.push(0x80 | (charcode & 0x3f));
+                }
+                else
+                {
+                    ++i;
+                    charcode = 0x10000 + (((charcode & 0x3ff) << 10) | (text.charCodeAt(i) & 0x3ff));
+                    ret.push(0xf0 | (charcode >> 18));
+                    ret.push(0x80 | ((charcode >> 12) & 0x3f));
+                    ret.push(0x80 | ((charcode >> 6) & 0x3f));
+                    ret.push(0x80 | (charcode & 0x3f));
+                }
+            }
+            
+            return ret;
+        }
+        
+        // create a string from a byte array using utf-8 encoding
+        function bytesToString(byteArray)
+        {
+            var ret = "";
+            for (var i = 0; i < byteArray.length; ++i)
+            {
+                var charcode = byteArray[i];
+                if (charcode >= 0x80)
+                {
+                    var bytecount = -1;
+                    for (var j = 7; j >= 0; --j)
+                    {
+                        if ((charcode >> j) & 1)
+                            ++bytecount;
+                        else
+                            break;
+                    }
+                    
+                    if (i + bytecount >= byteArray.length)
+                        return null;
+                    
+                    charcode &= (1 << (6 - bytecount)) - 1; 
+                    
+                    for (var j = 0; j < bytecount; ++j)
+                    {
+                        charcode <<= 6;
+                        var currentByte = byteArray[++i];
+                        if ((currentByte & 0x80) != 0x80)
+                            return null;
+                        
+                        charcode |= currentByte & 0x3f;
+                    }
+                }
+                
+                ret += String.fromCodePoint(charcode);
+            }
+            
+            return ret;
+        }
+        
+        // convert a string to a bigint
+        function stringToBigint(string)
+        {
+            var bytes = stringToBytes(string);
+            var ret = 0n;
+            
+            for (var i = 0; i < bytes.length; ++i)
+            {
+                ret <<= 8n;
+                ret |= BigInt(bytes[i]);
+            }
+            
+            return ret;
+        }
+        
+        // convert a bigint back to a string
+        function bigIntToString(bigint)
+        {
+            var bytes = [];
+            
+            while (bigint != 0n)
+            {
+                bytes.push(Number(bigint & 255n));
+                bigint >>= 8n;
+            }
+            
+            bytes.reverse();
+            return bytesToString(bytes);
+        }
+        
+        // convert data to hexadecimal, with fixed length
+        function encodeToHex(data, padCount)
+        {
+            var id = data[0];
+            var num = data[1];
+            
+            return id.toString(16).toUpperCase().padStart(2, "0") + num.toString(16).toUpperCase().padStart(padCount, "0");
+        }
+        
+        // maybe these will be used in the future
+        //// convert data to base64
+        //function encodeToBase64(data)
+        //{
+        //    var id = data[0];
+        //    var num = data[1];
+        //    
+        //    var bytes = [];
+        //    while (num != 0n)
+        //    {
+        //        bytes.push(String.fromCharCode(Number(num & 0xffn)));
+        //        num >>= 8n;
+        //    }
+        //    
+        //    bytes.push(String.fromCharCode(Number(id)));
+        //    bytes.reverse();
+        //    var byteString = bytes.join("");
+        //    return btoa(byteString);
+        //}
+        //
+        //// convert to a list of words
+        //function encodeToWords(data)
+        //{
+        //    var id = data[0];
+        //    var num = data[1];
+        //    
+        //    var str = num.toString(2);
+        //    str = num.toString(2) + str.padStart(9 - (str.length % 11), "0");
+        //    
+        //    var result = [];
+        //    for (var i = 0; i < str.length; i += 11)
+        //        result.push(wordList[Number.parseInt(str.substr(i, 11), 2)]);
+        //    
+        //    return result.join(" ");
+        //}
+        
+        // create a random, cryptographically secure random number, less than max
+        function getRandomBigint(max)
+        {
+            var uintCount = 0;
+            var maxCopy = max;
+            while (maxCopy != 0n)
+            {
+                maxCopy >>= 32n;
+                ++uintCount;
+            }
+            
+            var randomBytes = window.crypto.getRandomValues(new Uint32Array(uintCount));
+            var bigint = 0n;
+            
+            for (var j = 0; j < uintCount; ++j)
+            {
+                bigint <<= 32n;
+                bigint |= BigInt(randomBytes[j]);
+            }
+            
+            return bigint % max;
+        }
+        
+        // generate the shares for the secret
+        function generate()
+        {
+            var total = validateNumber("Total count", "input_total");
+            if (typeof(total) === "string")
+            {
+                document.getElementById("error_text").innerHTML = total;
+                return;
+            }
+            
+            if (total > 255)
+            {
+                document.getElementById("error_text").innerHTML = "Total count must be 255 at most";
+                return;
+            }
+            
+            var required = validateNumber("Required count", "input_required");
+            if (typeof(required) === "string")
+            {
+                document.getElementById("error_text").innerHTML = required;
+                return;
+            }
+            
+            if (required > total)
+            {
+                document.getElementById("error_text").innerHTML = "Required count must be less than or equal to total count";
+                return;
+            }
+            
+            if (required < 2)
+            {
+                document.getElementById("error_text").innerHTML = "Required count must be at least 2";
+                return;
+            }
+            
+            var secretStr = document.getElementById("input_secret").value;
+            if (secretStr === "")
+            {
+                document.getElementById("error_text").innerHTML = "Secret is empty";
+                return;
+            }
+            var secret = stringToBigint(secretStr);
+            
+            var prime;
+            var primeExponent;
+            // select the smallest prime that is larger than the secret
+            for (var i = 0; i < primeExponents.length; ++i)
+            {
+                prime = (1n << primeExponents[i]) - 1n;
+                if (secret < prime)
+                {
+                    primeExponent = Number(primeExponents[i]);
+                    break;
+                }
+            }
+            
+            if (primeExponent === undefined)
+            {
+                document.getElementById("error_text").innerHTML = "Secret is too long";
+                return;
+            }
+            
+            var coeffs = new Array(required);
+            coeffs[0] = secret;
+            
+            // generate random numbers for the coefficients
+            for (i = 1; i < required; ++i)
+                coeffs[i] = getRandomBigint(prime);
+            
+            var shares = new Array(total);
+            // calculate the shares
+            for (i = 0; i < total; ++i)
+                shares[i] = [BigInt(randomizedIndices[i + 1]), evalAt(BigInt(i + 1), coeffs, prime)];
+            
+            var div = document.getElementById("generate_result");
+            div.innerHTML = "";
+            
+            var padCount = Math.ceil(primeExponent / 4);
+            for (i = 0; i < total; ++i)
+            {
+                var div2 = document.createElement("div");
+                var encoded;
+                encoded = encodeToHex(shares[i], padCount);
+                // maybe I'll do these later
+                //switch (document.getElementById("output_type").value)
+                //{
+                //    case "hex":
+                //        encoded = encodeToHex(shares[i], padCount);
+                //        generateResultCSSObject.wordBreak = "break-all";
+                //        break;
+                //    case "base64":
+                //        encoded = encodeToBase64(shares[i]);
+                //        generateResultCSSObject.wordBreak = "break-all";
+                //        break;
+                //    case "words":
+                //        encoded = encodeToWords(shares[i]);
+                //        generateResultCSSObject.wordBreak = "";
+                //        break;
+                //    default:
+                //        return;
+                //}
+                div2.innerHTML = encoded;
+                div2.style.fontFamily = "Consolas";
+                div.appendChild(div2);
+            }
+            
+            document.getElementById("error_text").innerHTML = "";
+            document.getElementById("result_text").innerHTML = "You'll need " + ((total == required) ? "all " : "any ") + required + " of these shares to reconstruct the secret:";
+        }
+        
+        function textareaFocus(textarea)
+        {
+            var lines = textarea.value.split(/\n+/g);
+            if (lines[lines.length - 1] != "")
+            {
+                var cursorPos = textarea.selectionStart;
+                textarea.value += "\n";
+                textarea.selectionStart = cursorPos;
+                textarea.selectionEnd = cursorPos;
+                window.requestAnimationFrame(function()
+                {
+                    textarea.scrollLeft = 0;
+                });
+            }
+        }
+        
+        // decode from the given strings
+        function decode()
+        {
+            var textarea = document.getElementById("decode_textarea");
+            var lines = textarea.value.split(/\n+/g);
+            var count = lines.length;
+            if (lines[count - 1] == "")
+                --count;
+            
+            if (count < 2)
+            {
+                document.getElementById("decode_result").innerHTML = "";
+                return;
+            }
+            
+            var decoded = [];
+            var primeIndex = 0;
+            var prime = (1n << primeExponents[primeIndex]) - 1n;
+            // get the data from the inputs
+            for (var i = 0; i < lines.length; ++i)
+            {
+                var current = lines[i];
+                if (current == "")
+                    continue;
+                
+                if (current.length < 3)
+                {
+                    document.getElementById("decode_result").innerHTML = "";
+                    return;
+                }
+                
+                var id = Number.parseInt(current.substr(0, 2), 16);
+                if (isNaN(id))
+                {
+                    document.getElementById("decode_result").innerHTML = "";
+                    return;
+                }
+                
+                var num;
+                try
+                {
+                    num = BigInt("0x" + current.substring(2));
+                }
+                catch (e)
+                {
+                    document.getElementById("decode_result").innerHTML = "";
+                    return;
+                }
+                
+                if (num >= prime)
+                {
+                    var newIndex = -1;
+                    for (var j = primeIndex; j < primeExponents.length; ++j)
+                    {
+                        prime = (1n << primeExponents[j]) - 1n;
+                        if (num < prime)
+                        {
+                            newIndex = j;
+                            break;
+                        }
+                    }
+                    
+                    if (newIndex == -1)
+                    {
+                        document.getElementById("decode_result").innerHTML = "";
+                        return;
+                    }
+                    
+                    primeIndex = newIndex;
+                }
+                
+                decoded.push([BigInt(randomizedIndicesInverse[id]), num]);
+            }
+            
+            var finalResult;
+            try
+            {
+                // try to reconstruct from the shares
+                finalResult = bigIntToString(reconstruct(decoded, prime));
+            }
+            catch (e)
+            {
+                document.getElementById("decode_result").innerHTML = "";
+                return;
+            }
+            
+            document.getElementById("decode_result").innerHTML = finalResult;
+        }
+        
+        // idk why these are here
+        // also I could just use bigint.toString(2)
+        /*
+        function convertToBinary(bigint)
+        {
+            if (bigint < 0n)
+                return "positive only";
+            
+            if (bigint == 0n)
+                return "0";
+            
+            var ret = [];
+            while (bigint != 0n)
+            {
+                ret.push((bigint & 1n).toString());
+                bigint >>= 1n;
+            }
+            
+            return ret.reverse().join("");
+        }
+        
+        function modPow(number, exponent, modulus)
+        {
+            var ret = 1n;
+            while (exponent != 0n)
+            {
+                if (exponent & 1n)
+                    ret = (ret * number) % modulus;
+                
+                exponent >>= 1n;
+                number = (number * number) % modulus;
+            }
+            
+            return ret;
+        }
+        */
+    </script>
+</body>
+</html>
