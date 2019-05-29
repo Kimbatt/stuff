@@ -100,9 +100,9 @@
         <div id="loading-text" style="display: inline-block; font-size: 20px;"></div>
     </div>
     <div id="error-text" style="margin-left: 10px; display: none; color: red; font-size: 20px; vertical-align: middle;">Error loading balances</div>
-    <div id="balances-div" style="margin-left: 10px; display: none; font-size: 20px; vertical-align: middle;">Total balance of this page (sats): 
-        <span id="balances-confirmed" style="color: #00ff00;">0</span> confirmed, <span id="balances-unconfirmed" style="color: #ffff00;">0</span> unconfirmed</div>
-
+    <div id="balances-div" style="margin-left: 10px; display: none; font-size: 20px; vertical-align: middle;">Total balance of this page: 
+        <span id="balances-confirmed" style="color: #00ff00;">0</span> sats
+    </div>
     <br />
     <div style="font-size: 20px; font-weight: bold; font-family: Consolas; padding-bottom: 5px; display: inline;">Page </div>
         <input id="page_jumpto_id" type="number" style="width: calc(100% - 340px); font-family: Consolas; font-size: 20px; padding: 5px; text-align: left; display: inline-block;" value="1">
@@ -506,6 +506,11 @@
         {
             return "<a href=\"https://www.blockonomics.co/#/search?q=" + address + "\">" + address + "</a>";
         }
+
+        function getAddressLinkBlockstreamInfo(address)
+        {
+            return "<a href=\"https://blockstream.info/address/" + address + "\">" + address + "</a>";
+        }
         
         var countPerPage = 50n;
         var currentPage;
@@ -598,10 +603,10 @@
 
                 var cont = container.childNodes[i].childNodes;
                 
-                cont[0].innerHTML = getAddressLinkBlockonomicsCo(p2pkhAddressesC[i]) + "&nbsp;" +
-                    getAddressLinkBlockonomicsCo(p2pkhAddressesU[i]) + "<br />" +
-                    getAddressLinkBlockonomicsCo(p2shAddresses[i]) + "&nbsp;" +
-                    getAddressLinkBlockonomicsCo(bech32Addresses[i]);
+                cont[0].innerHTML = getAddressLinkBlockstreamInfo(p2pkhAddressesC[i]) + "&nbsp;" +
+                    getAddressLinkBlockstreamInfo(p2pkhAddressesU[i]) + "<br />" +
+                    getAddressLinkBlockstreamInfo(p2shAddresses[i]) + "&nbsp;" +
+                    getAddressLinkBlockstreamInfo(bech32Addresses[i]);
                     
                 cont[1].innerHTML = privkeysCompressed[i] + "<br />" + privkeysUncompressed[i];
             }
@@ -742,42 +747,45 @@
         
         async function checkBalances()
         {
-            let totalBalanceConfirmed = 0, totalBalanceUnconfirmed = 0;
+            let totalBalance = 0;
             const promises = new Array(4);
             const allAddresses = [p2pkhAddressesC, p2pkhAddressesU, p2shAddresses, bech32Addresses];
             for (let i = 0; i < allAddresses.length; ++i)
             {
+                const currentAddresses = allAddresses[i];
                 promises[i] = new Promise((resolve, reject) =>
                 {
                     const request = new XMLHttpRequest();
                     request.onload = e =>
                     {
-                        if (e.target.status !== 200)
+                        if (e.target.status === 404)
+                        {
+                            // nothing found
+                            resolve();
+                            return;
+                        }
+                        else if (e.target.status !== 200)
                         {
                             reject();
                             return;
                         }
 
-                        const data = JSON.parse(e.target.responseText).response;
-                        for (let balance of data)
-                        {
-                            totalBalanceConfirmed += balance.confirmed;
-                            totalBalanceUnconfirmed += balance.unconfirmed;
-                        }
+                        const data = JSON.parse(e.target.responseText).data;
+                        if (data && data.set)
+                            totalBalance += data.set.balance;
 
                         resolve();
                     };
 
                     request.onerror = reject;
-                    request.open("POST", "https://cors-anywhere.herokuapp.com/https://www.blockonomics.co/api/balance");
-                    request.send(JSON.stringify({addr: allAddresses[i].join(" ")}));
+                    request.open("GET", "https://api.blockchair.com/bitcoin/dashboards/addresses/" + currentAddresses.join(","));
+                    request.send();
                 });
             }
 
             await Promise.all(promises);
             document.getElementById("balances-div").style.display = "inline-block";
-            document.getElementById("balances-confirmed").innerText = totalBalanceConfirmed;
-            document.getElementById("balances-unconfirmed").innerText = totalBalanceUnconfirmed;
+            document.getElementById("balances-confirmed").innerText = totalBalance;
         }
 
 /* this is taken from directory.io, which is no longer available (but I saved it just in case)
