@@ -99,7 +99,7 @@
         <div class="loading-spinner" style="vertical-align: middle;"></div>
         <div id="loading-text" style="display: inline-block; font-size: 20px;"></div>
     </div>
-    <div id="error-text" style="margin-left: 10px; display: none; color: red; font-size: 20px; vertical-align: middle;">Error loading balances</div>
+    <div id="error-text" style="margin-left: 10px; display: none; color: red; font-size: 20px; vertical-align: middle;">Error loading balances, try again later</div>
     <div id="balances-div" style="margin-left: 10px; display: none; font-size: 20px; vertical-align: middle;">Total balance of this page: 
         <span id="balances-confirmed" style="color: #00ff00;">0</span> sats
     </div>
@@ -749,7 +749,7 @@
         {
             let totalBalance = 0;
             const promises = new Array(4);
-            const allAddresses = [p2pkhAddressesC, p2pkhAddressesU, p2shAddresses, bech32Addresses];
+            const allAddresses = [[p2pkhAddressesC, p2pkhAddressesU], [p2shAddresses, bech32Addresses]];
             for (let i = 0; i < allAddresses.length; ++i)
             {
                 const currentAddresses = allAddresses[i];
@@ -778,7 +778,7 @@
                     };
 
                     request.onerror = reject;
-                    request.open("GET", "https://api.blockchair.com/bitcoin/dashboards/addresses/" + currentAddresses.join(","));
+                    request.open("GET", "https://api.blockchair.com/bitcoin/dashboards/addresses/" + currentAddresses[0].join(",") + "," + currentAddresses[1].join(","));
                     request.send();
                 });
             }
