@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="utf-8">
+<title>Seed</title>
+
+<style>
+body
+{
+    background: #323639;
+    color: white;
+    font-size: 20px;
+}
+
+button
+{
+    background-color: #146dff;
+    border: none;
+    border-radius: 5px;
+    color: #ffffff;
+    padding: 12px 25px 12px 25px;
+    margin: 5px 0px 5px 0px;
+    font-family: "Verdana";
+    font-size: 20px;
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+button:disabled
+{
+    background-color: #77abff;
+    cursor: not-allowed;
+}
+
+button:enabled:hover
+{
+    background-color: #54adff;
+}
+
+input
+{
+    background: #45494d;
+    color: white;
+    padding: 4px;
+    border: 1px solid #a0a3a1;
+    font-size: 20px;
+}
+
+textarea
+{
+    background: #45494d;
+    color: white;
+    border: 1px solid #a0a3a1;
+    padding: 4px;
+    font-size: 20px;
+    resize: none;
+    word-wrap: break-word;
+    width: calc(100% - 8px);
+}
+
+.container
+{
+    margin-bottom: 10px;
+}
+
+.title-small
+{
+    margin-bottom: 5px;
+}
+
+select
+{
+    background: #45494d;
+    color: white;
+    font-size: 20px;
+    padding: 2px;
+}
+
+.error-text
+{
+    color: red;
+    font-size: 24px;
+    margin: 10px;
+}
+
+.loading-spinner
+{
+    background-image: url('data:image/svg+xml;utf-8,<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke-width="5" stroke-linecap="round" stroke-dasharray="90" stroke="white"></circle></svg>');
+    display: inline-block;
+    width: 50px;
+    height: 50px;
+    transform-origin: 50% 50%;
+    animation: loading-spin 0.618s linear infinite;
+    transition: opacity 0.1s linear, visibility 0.1s linear;
+    vertical-align: top;
+}
+
+@keyframes loading-spin
+{
+    100%
+    {
+        transform: rotate(360deg);
+    }
+}
+
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button
+{ 
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.derived-address-container
+{
+    border: 2px solid black;
+    padding: 6px;
+}
+
+</style>
+</head>
+<body>
+
+<div id="main">
+    <div style="font-size: 30px; margin-bottom: 10px;">Seed tool</div>
+
+    <div style="margin-bottom: 10px;">
+        <button onclick="GenerateNewSeedButtonClick()">Generate new seed</button>
+        <label>Word count:
+            <select id="seed-wordcount">
+                <option value="12">12</option>
+                <option value="15">15</option>
+                <option value="18">18</option>
+                <option value="21">21</option>
+                <option value="24" selected>24</option>
+            </select>
+        </label>
+        <div id="loading-spinner" class="loading-spinner" style="display: inline-block; margin: 0px 0px 10px 20px; visibility: hidden; opacity: 0; vertical-align: middle;"></div>
+        <div id="seed-error-text" class="error-text" style="visibility: hidden; display: inline-block;">error</div>
+    </div>
+    <div class="container">
+        <div class="title-small">BIP39 seed</div>
+        <textarea id="seed-textarea" oninput="SeedChanged()"></textarea>
+    </div>
+    <div class="container">
+        <div class="title-small">Passphrase</div>
+        <textarea id="seed-passphrase" placeholder="(empty)" oninput="SeedPassphraseChanged()"></textarea>
+    </div>
+    <div class="container">
+        <div class="title-small">BIP32 root key</div>
+        <textarea id="seed-bip32-rootkey" onkeydown="SeedBIP32RootKeyWarnIfNotEmpty(event)" oninput="SeedBIP32RootKeyChanged()"></textarea>
+    </div>
+    <div style="margin-top: 50px;">
+        <label>Derivation path:
+            <select id="derivation-path-preset" onchange="DerivationPathChanged()">
+                <option value="32">Custom</option>
+                <option value="44">Legacy</option>
+                <option value="49" selected>Segwit</option>
+                <option value="84">Bech32</option>
+            </select>
+        </label>
+        <label style="margin-left: 20px;" id="generateChangeAddressesLabel">Generate change addresses? <input type="checkbox" id="generateChangeAddressesCheckbox"></label>
+        <br>
+        <label style="margin-top: 20px; display: inline-block;">Path: <input type="text" placeholder="e.g. m/0'/0" value="m/49'/0'/0'" id="derivation-path" readonly></label>
+        <label style="margin-left: 20px;">Generate hardened addresses? <input type="checkbox" id="generateHardenedAddressesCheckbox"></label>
+        <br>
+        <button style="margin: 20px 0px;" id="calculateDerivedAddressesButton" onclick="CalculateDerivedAddresses()" disabled>Calculate addresses</button>
+        <label style="margin-left: 20px;">Count: <input type="number" id="derived-address-count" min="1" max="100" value="20" style="width: 50px;"></label>
+        <label style="margin-left: 20px;">Start index: <input type="number" id="derived-address-offset" value="0" style="width: 50px;"></label>
+        <div id="loading-spinner-addresses" class="loading-spinner" style="display: inline-block; margin: 0px 0px 10px 20px; visibility: hidden; opacity: 0; vertical-align: middle;"></div>
+        <div id="addresses-error-text" class="error-text" style="visibility: hidden; display: inline-block;">error</div>
+        <div style="margin-bottom: 10px;">
+            <div style="display: inline-block; width: calc(50% - 4px);">
+                <div style="margin-bottom: 10px;">Extended public key</div>
+                <textarea id="extended-public-key" readonly></textarea>
+            </div>
+            <div style="display: inline-block; width: calc(50% - 4px);">
+                <div style="margin-bottom: 10px;">Extended private key</div>
+                <textarea id="extended-private-key" readonly></textarea>
+            </div>
+        </div>
+        <div class="derived-address-container">
+            <div style="display: inline-block; width: 320px;">Derivation path</div>
+            <div style="display: inline-block; width: 600px;">Address</div>
+            <div style="display: inline-block;">Private key</div>
+        </div>
+        <div id="derived-addresses" style="font-family: Lucida Console; font-weight: bold;"></div>
+    </div>
+</div>
+
+<script src="workerPool.js"></script>
+<script src="crypto.js"></script>
+<script src="bip32.js"></script>
+<script src="bip39.js"></script>
+
+</body>
+</html>
