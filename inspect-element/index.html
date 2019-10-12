@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>test</title>
+    
+    <style>
+    body
+    {
+        background: white;
+        color: black;
+        font-size: 20px;
+    }
+
+    #tbl2
+    {
+        border-collapse: collapse;
+        border: 2px solid black;
+    }
+
+    #tbl2 tr:nth-child(2n)
+    {
+        background: #c2c2c2;
+    }
+
+    #tbl2 tr:nth-child(2n+1)
+    {
+        background: #dfdfdf;
+    }
+
+    #tbl2 td
+    {
+        padding: 5px;
+    }
+
+    .first-column
+    {
+        width: 180px;
+    }
+
+    .second-column
+    {
+        width: 220px;
+    }
+
+    </style>
+</head>
+<body>
+
+<div>The texts on the page cannot be edited with inspect element if the first checkbox is checked. Try changing this text!</div>
+
+<table id="tbl2" style="margin-top: 20px;">
+    <tr>
+        <td>
+            <label style="display: block;"><input id="no-inspectelement-checkbox" type="checkbox" checked onchange="InspectElementProtection(this.checked)"> Cannot change values with inspect element (toggle with Ctrl-Shift-F9)</label>
+            <div style="margin: 10px;">Changing any text value with inspect element while this box is checked will have no effect<br>
+                You can still change texts on the page by setting innerText or innerHTML from js code</div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label style="display: block;"><input id="no-rightclick-checkbox" type="checkbox" onchange="NoRightClick(this.checked)"> No right-click on the page (toggle with Ctrl-Shift-F8)</label>
+            <div style="margin: 10px;">Disable the right-click context menu, so no option for inspect element</div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label style="display: block;"><input id="no-devtools-hotkey-checkbox" type="checkbox" onchange="NoDevTools(this.checked)"> Disable dev tools hotkeys (toggle with Ctrl-Shift-F7)</label>
+            <div style="margin: 10px;">If checked, the dev tools panel cannot be be opened with the hotkeys (F12, Ctrl-Shift-I, etc...)</div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label style="display: block;"><input id="spam-debugger-checkbox" type="checkbox" onchange="Debugger(this.checked)"> Spam debugger while dev tools are open (toggle with Ctrl-Shift-F6)</label>
+            <div style="margin: 10px;">While the dev tools are open, trigger a debug break every frame. This will also switch to the sources/debugger tab immediately from the elements tab when the dev tools are opened. (has no effect while the dev tools are closed)</div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label style="display: block;"><input id="hide-page-checkbox" type="checkbox" onchange="HidePageEnabled(this.checked)"> Hide page while dev tools are open (toggle with Ctrl-Shift-T)</label>
+            <div style="margin: 10px;">Hide the page when the dev tools are opened, show it again when it is closed. The dev tools must be docked for this to work (they are docked by default)</div>
+        </td>
+    </tr>
+</table>
+
+<script>
+window.addEventListener("keydown", ev =>
+{
+    if (ev.shiftKey && ev.ctrlKey)
+    {
+        let checkbox;
+        switch (ev.key)
+        {
+            case "F9":
+                checkbox = document.getElementById("no-inspectelement-checkbox");
+                break;
+            case "F8":
+                checkbox = document.getElementById("no-rightclick-checkbox");
+                break;
+            case "F7":
+                checkbox = document.getElementById("no-devtools-hotkey-checkbox");
+                break;
+            case "F6":
+                checkbox = document.getElementById("spam-debugger-checkbox");
+                break;
+            case "T":
+                checkbox = document.getElementById("hide-page-checkbox");
+                break;
+        }
+
+        if (checkbox)
+        {
+            checkbox.checked = !checkbox.checked;
+            checkbox.onchange();
+            ev.preventDefault();
+        }
+    }
+});
+
+const observer = new MutationObserver(mutationRecords =>
+{
+    // mutationRecords is an array of element changes
+    for (let i = 0; i < mutationRecords.length; ++i)
+    {
+        const mutationRecord = mutationRecords[i];
+        if (mutationRecord.type === "characterData") // we only care about changes to character data (so if the text is changed)
+        {
+            const textNode = mutationRecord.target;
+            // new text value is in textNode.nodeValue
+            // old text value is in mutationRecord.oldValue
+
+            // changing textNode.nodeValue will trigger the change event again
+            // to avoid being stuck in an infinite recursion callback, we set a dummy value to indicate we made the change
+            // so if we made the change we will not change it again
+            if (textNode.__valueChanging)
+            {
+                delete textNode.__valueChanging;
+                continue;
+            }
+
+            // set dummy value here
+            textNode.__valueChanging = true;
+
+            // set the text on the element
+            // you could set this to the previous value, change it to something completely new, it's up to you
+            textNode.nodeValue = mutationRecord.oldValue;
+        }
+    }
+});
+
+function InspectElementProtection(on)
+{
+    if (on)
+    {
+        // watch all <html> elements for changes, report changes on any child element
+        // to only watch specific elements/classes, use a different queryselector string (see https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Selectors)
+        document.querySelectorAll("html").forEach(element => observer.observe(element, { subtree: true, characterData: true, characterDataOldValue: true }));
+    }
+    else
+        observer.disconnect();
+}
+
+InspectElementProtection(true);
+
+const rightClickFunction = ev => ev.preventDefault();
+function NoRightClick(on)
+{
+    if (on)
+        window.addEventListener("contextmenu", rightClickFunction);
+    else
+        window.removeEventListener("contextmenu", rightClickFunction);
+}
+
+
+function devToolsEvent(ev)
+{
+    if (ev.keyCode === 123 /* F12: Chrome, Edge dev tools */ || 
+        (ev.shiftKey && ev.ctrlKey && (
+        ev.keyCode === 73 /* + I: Chrome, FF dev tools */ || 
+        ev.keyCode === 67 /* + C: Chrome, FF inspect el */ || 
+        ev.keyCode === 74 /* + J: Chrome, FF console */ || 
+        ev.keyCode === 75 /* + K: FF web console */ || 
+        ev.keyCode === 83 /* + S: FF debugger */ || 
+        ev.keyCode === 69 /* + E: FF network */ || 
+        ev.keyCode === 77 /* + M: FF responsive design mode */)) ||
+        (ev.shiftKey && (
+        ev.keyCode === 118 /* + F5: Firefox style editor */ || 
+        ev.keyCode === 116 /* + F5: Firefox performance */)) ||
+        (ev.ctrlKey && ev.keyCode === 85 /* + U: Chrome, FF view source */))
+            ev.preventDefault();
+}
+
+function NoDevTools(on)
+{
+    if (on)
+        window.addEventListener("keydown", devToolsEvent);
+    else
+        window.removeEventListener("keydown", devToolsEvent);
+}
+
+let isDebuggerOn = false;
+function Debugger(on)
+{
+    isDebuggerOn = on;
+}
+
+function DebuggerFrame()
+{
+    window.requestAnimationFrame(DebuggerFrame);
+
+    if (isDebuggerOn)
+    {
+        // call debugger every frame
+        // it has no effect if the dev tools are not open
+        debugger;
+    }
+}
+window.requestAnimationFrame(DebuggerFrame);
+
+let hidePageEnabled = false;
+function HidePageEnabled(enabled)
+{
+    hidePageEnabled = enabled;
+}
+
+// listen for window resize events: if the window is resized, then we can check if the dev tools are open
+window.addEventListener("resize", CheckIfDevToolsAreOpen);
+
+let devToolsAreOpenRightNow = false;
+function CheckIfDevToolsAreOpen()
+{
+    if (!hidePageEnabled)
+        return;
+
+    const threshold = 160;
+    // if the difference between innerHeight and outerHeight are greater than the threshold, then the dev tools are probably open
+    const devToolsOpen = window.outerHeight - window.innerHeight > threshold || window.outerWidth - window.innerWidth > threshold;
+    if (devToolsAreOpenRightNow && !devToolsOpen)
+    {
+        // just closed dev tools
+        OnDevToolsClose();
+    }
+    else if (!devToolsAreOpenRightNow && devToolsOpen)
+    {
+        // just opened dev tools
+        OnDevToolsOpen();
+    }
+
+    devToolsAreOpenRightNow = devToolsOpen;
+}
+
+let documentBodyElements = [];
+function OnDevToolsOpen()
+{
+    while (document.lastChild)
+    {
+        documentBodyElements.push(document.removeChild(document.lastChild));
+    }
+}
+
+function OnDevToolsClose()
+{
+    while (documentBodyElements.length !== 0)
+    {
+        document.appendChild(documentBodyElements.pop());
+    }
+}
+
+</script>
+
+</body>
+</html>

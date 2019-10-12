@@ -1,0 +1,1 @@
+Some tricks to make it difficult to change stuff with inspect element on webpages.
